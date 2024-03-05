@@ -1,0 +1,26 @@
+## Interface-Retail: 100205
+## Title: AAA Transformer
+## Description: Transforms TSM group strings to AAA items JSON
+## Notes: Transforms TSM group strings to AAA items JSON
+## Author: Berickus
+## Version: 1.0.0
+## OptionalDependencies: TradeSkillMaster, OribosExchange, Auctionator
+## SavedVariables: AAATransformerDB
+## X-Embeds: Ace3, LibDataBroker-1.1, CallbackHandler-1.0, LibDBIcon-1.0
+## X-Compatible-With: 100205
+## X-Curse-Packaged-Version: 1.0.0
+## X-Curse-Project-Name: AAATransformer
+## X-Curse-Project-ID: 983232
+## X-Localizations: enUS, deDE
+
+embeds.xml
+
+Const.lua
+
+Locales\Locales.xml
+
+AAATransformer.lua
+
+PriceSources\ATR.lua
+PriceSources\OE.lua
+PriceSources\TSM.lua
