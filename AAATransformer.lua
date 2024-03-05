@@ -397,19 +397,25 @@ function addon:CreateWindow()
 	end)
 
 	-- Create text box, where the JSON is placed.
-	local jsonBox = AceGUI:Create("MultiLineEditBox")
-	mainGroup:AddChild(jsonBox)
-	jsonBox:SetMaxLetters(0)
-	jsonBox:SetLabel(L["json_box_label"])
-	jsonBox:SetNumLines(10)
-	jsonBox:SetHeight(170)
-	jsonBox:DisableButton(true)
-	jsonBox:SetFullWidth(true)
-	jsonBox:SetText("")
-	addon.json = jsonBox
+	local jsonToGroup = AceGUI:Create("SimpleGroup")
+	jsonToGroup:SetLayout("Flow")
+	jsonToGroup:SetFullWidth(true)
+	mainGroup:AddChild(jsonToGroup)
+
+	local jsonItemsBox = AceGUI:Create("MultiLineEditBox")
+	jsonToGroup:AddChild(jsonItemsBox)
+	jsonItemsBox:SetMaxLetters(0)
+	jsonItemsBox:SetLabel(L["json_items_box_label"])
+	jsonItemsBox:SetNumLines(10)
+	jsonItemsBox:SetHeight(170)
+	jsonItemsBox:DisableButton(true)
+	jsonItemsBox:SetFullWidth(false)
+	jsonItemsBox:SetRelativeWidth(0.5)
+	jsonItemsBox:SetText("")
+	addon.json = jsonItemsBox
 	addon.editfont = CreateFont("TransformEditFont")
 	addon.editfont:CopyFontObject(ChatFontNormal)
-	jsonBox.editBox:SetFontObject(addon.editfont)
+	jsonItemsBox.editBox:SetFontObject(addon.editfont)
 	addon.editfontnorm = select(2, addon.editfont:GetFont())
 
 	-- AceGUI fails at enforcing minimum Frame resize for a container, so fix it
@@ -418,7 +424,7 @@ function addon:CreateWindow()
 		if (height < addon.minheight) then
 			frame:SetHeight(addon.minheight)
 		else
-			jsonBox:SetHeight((height - addon.minheight) / 2 + 170)
+			jsonItemsBox:SetHeight((height - addon.minheight) / 2 + 170)
 		end
 	end)
 
@@ -429,12 +435,54 @@ function addon:CreateWindow()
 		end
 	end)
 
-	local originalHandler = jsonBox.editBox:GetScript("OnEnterPressed")
-	jsonBox.editBox:SetScript("OnEnterPressed", function(self)
+	local originalHandler = jsonItemsBox.editBox:GetScript("OnEnterPressed")
+	jsonItemsBox.editBox:SetScript("OnEnterPressed", function(self)
 		if originalHandler then
 			originalHandler(self)
 		else
-			jsonBox.editBox:Insert("\n")
+			jsonItemsBox.editBox:Insert("\n")
+		end
+	end)
+
+	local jsonPetsBox = AceGUI:Create("MultiLineEditBox")
+	jsonToGroup:AddChild(jsonPetsBox)
+	jsonPetsBox:SetMaxLetters(0)
+	jsonPetsBox:SetLabel(L["json_pets_box_label"])
+	jsonPetsBox:SetNumLines(10)
+	jsonPetsBox:SetHeight(170)
+	jsonPetsBox:DisableButton(true)
+	jsonPetsBox:SetFullWidth(false)
+	jsonPetsBox:SetRelativeWidth(0.5)
+	jsonPetsBox:SetText("")
+	addon.jsonItems = jsonPetsBox
+	addon.editfont = CreateFont("TransformEditFont")
+	addon.editfont:CopyFontObject(ChatFontNormal)
+	jsonPetsBox.editBox:SetFontObject(addon.editfont)
+	addon.editfontnorm = select(2, addon.editfont:GetFont())
+
+	-- AceGUI fails at enforcing minimum Frame resize for a container, so fix it
+	hooksecurefunc(frame, "OnHeightSet", function(widget, height)
+		if (widget ~= addon.gui) then return end
+		if (height < addon.minheight) then
+			frame:SetHeight(addon.minheight)
+		else
+			jsonPetsBox:SetHeight((height - addon.minheight) / 2 + 170)
+		end
+	end)
+
+	hooksecurefunc(frame, "OnWidthSet", function(widget, width)
+		if (widget ~= addon.gui) then return end
+		if (width < addon.minwidth) then
+			frame:SetWidth(addon.minwidth)
+		end
+	end)
+
+	local originalHandler = jsonPetsBox.editBox:GetScript("OnEnterPressed")
+	jsonPetsBox.editBox:SetScript("OnEnterPressed", function(self)
+		if originalHandler then
+			originalHandler(self)
+		else
+			jsonPetsBox.editBox:Insert("\n")
 		end
 	end)
 
@@ -505,7 +553,13 @@ function addon:CreateWindow()
 	transformButton:SetText(L["transform_button"])
 	transformButton:SetWidth(buttonWidth)
 	transformButton:SetCallback("OnClick", function(widget, button)
-		jsonBox:SetText(private.TransformText(editBox:GetText()))
+		if private.TransformText(editBox:GetText()) then
+			jsonItemsBox:SetText(private.importContext.items)
+			jsonPetsBox:SetText(private.importContext.pets)
+		else
+			jsonItemsBox:SetText("{}")
+			jsonPetsBox:SetText("{}")
+		end
 	end)
 	buttonsGroup:AddChild(transformButton)
 
@@ -514,7 +568,8 @@ function addon:CreateWindow()
 	clearButton:SetWidth(buttonWidth)
 	clearButton:SetCallback("OnClick", function(widget, button)
 		editBox:SetText("")
-		jsonBox:SetText("")
+		jsonItemsBox:SetText("")
+		jsonPetsBox:SetText("")
 		editBox:SetFocus()
 	end)
 	buttonsGroup:AddChild(clearButton)
@@ -547,9 +602,9 @@ function private.TransformText(text)
 	debug("Transforming: " .. text)
 	addon.gui:SetStatusText(L["status_text"])
 	if private.ProcessTSMGroupString(text) then
-		return private.importContext.items
+		return true
 	end
-	return "{}"
+	return false
 end
 
 ----------------------------------------------------------------------------------
@@ -715,8 +770,10 @@ function private.ProcessTSMGroupString(str)
 		return false
 	end
 
-	local output = ""
-	output = "{"
+	local outputItems = ""
+	local outputPets = ""
+	outputItems = "{"
+	outputPets = "{"
 	for itemString, groupPath in pairs(items) do
 		local itemLink = type(itemString) == "string" and private.GetItemString(itemString) or "i:"
 		local price = (private.GetItemValue(itemString, itemLink, private.GetFromDb("settings", "priceSource")) or 0)
@@ -727,13 +784,20 @@ function private.ProcessTSMGroupString(str)
 		else
 			finalPrice = discountedPrice
 		end
-		output = output .. '\n    "' .. itemLink:sub(3) .. '": ' .. (string.format("%.2f", finalPrice)) .. ','
+		if (private.startsWith(itemLink, "p:")) then
+			outputPets = outputPets .. '\n    "' .. itemLink:sub(3) .. '": ' .. (string.format("%.2f", finalPrice)) .. ','
+		else
+			outputItems = outputItems .. '\n    "' .. itemLink:sub(3) .. '": ' .. (string.format("%.2f", finalPrice)) .. ','
+		end
 	end
-	output = output:sub(1, -2)
-	output = output .. "\n}"
+	outputItems = outputItems:sub(1, -2)
+	outputItems = outputItems .. "\n}"
+	outputPets = outputPets:sub(1, -2)
+	outputPets = outputPets .. "\n}"
 
 	debug("Decoded new import string")
-	private.importContext.items = output
+	private.importContext.items = outputItems
+	private.importContext.pets = outputPets
 	return true
 end
 
