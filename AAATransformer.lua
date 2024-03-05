@@ -777,7 +777,7 @@ function private.ProcessTSMGroupString(str)
 	for itemString, groupPath in pairs(items) do
 		local itemLink = type(itemString) == "string" and private.GetItemString(itemString) or "i:"
 		local price = (private.GetItemValue(itemString, itemLink, private.GetFromDb("settings", "priceSource")) or 0)
-		local discountedPrice = price / 100 / 100 * ((100 - private.GetFromDb("settings", "percent")) / 100)
+		local discountedPrice = price / 100 / 100 * ((100 - private.GetFromDb("settings", "discount")) / 100)
 		local finalPrice
 		if (discountedPrice == 0) then
 			finalPrice = private.GetFromDb("settings", "fallback")
