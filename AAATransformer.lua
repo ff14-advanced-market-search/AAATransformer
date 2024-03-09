@@ -1,8 +1,6 @@
 local addonName = "AAA Transformer"
 local addon = LibStub("AceAddon-3.0"):NewAddon(select(2, ...), addonName, "AceConsole-3.0")
 local AceGUI = LibStub("AceGUI-3.0")
-local LibDeflate = LibStub("LibDeflate")
-local LibSerialize = LibStub("LibSerialize")
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName);
 
 local defaults = {
@@ -31,6 +29,7 @@ local LDB, LDBo
 
 local private = {
 	availablePriceSources = {},
+	availableTsmGroups = {},
 	importContext = {},
 	itemStringCache = {},
 	debugLeaks = nil,
@@ -40,17 +39,6 @@ local private = {
 	settings = {
 		groups = {},
 	},
-}
-
-local VERSION = 1
-local MAGIC_STR = "TSM_EXPORT"
-local ITEM_MAX_ID = 999999
-local IMPORTANT_MODIFIER_TYPES = {
-	[9] = true,
-}
-local EXTRA_STAT_MODIFIER_TYPES = {
-	[29] = true,
-	[30] = true,
 }
 
 local function chatMsg(msg)
@@ -228,6 +216,7 @@ function addon:OnInitialize()
 	addon:RegisterChatCommand('AAATransformer', 'HandleChatCommand')
 
 	private.PreparePriceSources();
+	private.PrepareTsmGroups();
 	addon:RefreshConfig()
 end
 
@@ -344,11 +333,33 @@ function addon:CreateWindow()
 	private.SetEscapeHandler(frame, function() addon:ToggleWindow() end)
 
 	-- Create main group, where everything is placed.
-	local mainGroup = AceGUI:Create("SimpleGroup")
-	mainGroup:SetLayout("List")
-	mainGroup:SetFullWidth(true)
-	mainGroup:SetFullHeight(true)
-	frame:AddChild(mainGroup)
+	local mainGroup = private.CreateGroup("List", frame)
+
+	-- Create dropdown group, where everything is placed.
+	local dropdownGroup = private.CreateGroup("Flow", mainGroup)
+	local tsmGroup = private.CreateGroup("List", dropdownGroup)
+
+	-- Create tsm dropdown
+	local tsmDropdown = AceGUI:Create("Dropdown")
+	tsmGroup:AddChild(tsmDropdown)
+	addon.tsmDropdown = tsmDropdown
+	tsmDropdown:SetMultiselect(false)
+	tsmDropdown:SetLabel(L["tsm_groups_label"])
+	tsmDropdown:SetRelativeWidth(0.75)
+	tsmDropdown:SetCallback("OnEnter", private.UpdateValues)
+	tsmDropdown:SetCallback("OnValueChanged", function(widget, event, key)
+		settings.settings.tsmDropdown = key
+		private.UpdateValues()
+	end)
+	private.UpdateValues()
+
+	-- Create tsm sub group checkbox
+	local tsmSubgroups = AceGUI:Create("CheckBox")
+	addon.tsmSubgroups = tsmSubgroups
+	tsmGroup:AddChild(tsmSubgroups)
+	tsmSubgroups:SetType("checkbox")
+	tsmSubgroups:SetLabel(L["tsm_checkbox_label"])
+	tsmSubgroups:SetValue(true)
 
 	-- Create text box, where the text is placed.
 	local editBox = AceGUI:Create("MultiLineEditBox")
@@ -359,11 +370,11 @@ function addon:CreateWindow()
 		shortcut = "Command-V"
 	end
 	editBox:SetLabel(string.format(L["edit_box_label"], shortcut))
-	editBox:SetNumLines(10)
-	editBox:SetHeight(170)
+	editBox:SetNumLines(5)
+	editBox:SetHeight(120)
 	editBox:DisableButton(true)
 	editBox:SetFullWidth(true)
-	editBox:SetText("")
+	editBox:SetText(L["example_input"])
 	addon.edit = editBox
 	addon.editfont = CreateFont("TransformEditFont")
 	addon.editfont:CopyFontObject(ChatFontNormal)
@@ -376,7 +387,7 @@ function addon:CreateWindow()
 		if (height < addon.minheight) then
 			frame:SetHeight(addon.minheight)
 		else
-			editBox:SetHeight((height - addon.minheight) / 2 + 170)
+			editBox:SetHeight((height - addon.minheight) / 2 + 120)
 		end
 	end)
 
@@ -397,10 +408,7 @@ function addon:CreateWindow()
 	end)
 
 	-- Create text box, where the JSON is placed.
-	local jsonToGroup = AceGUI:Create("SimpleGroup")
-	jsonToGroup:SetLayout("Flow")
-	jsonToGroup:SetFullWidth(true)
-	mainGroup:AddChild(jsonToGroup)
+	local jsonToGroup = private.CreateGroup("Flow", mainGroup)
 
 	local jsonItemsBox = AceGUI:Create("MultiLineEditBox")
 	jsonToGroup:AddChild(jsonItemsBox)
@@ -487,10 +495,7 @@ function addon:CreateWindow()
 	end)
 
 	-- Create a group for the dropdowns (target)
-	local pasteToGroup = AceGUI:Create("SimpleGroup")
-	pasteToGroup:SetLayout("Flow")
-	pasteToGroup:SetFullWidth(true)
-	mainGroup:AddChild(pasteToGroup)
+	local pasteToGroup = private.CreateGroup("Flow", mainGroup)
 
 	local targetDiscount = AceGUI:Create("EditBox")
 	settings.settings.discount = settings.settings.discount or "90"
@@ -543,17 +548,14 @@ function addon:CreateWindow()
 	pasteToGroup:AddChild(fallback)
 
 	-- Create group for the buttons
-	local buttonsGroup = AceGUI:Create("SimpleGroup")
-	buttonsGroup:SetLayout("Flow")
-	buttonsGroup:SetFullWidth(true)
-	mainGroup:AddChild(buttonsGroup)
+	local buttonsGroup = private.CreateGroup("Flow", mainGroup)
 
 	local buttonWidth = 150
 	local transformButton = AceGUI:Create("Button")
 	transformButton:SetText(L["transform_button"])
 	transformButton:SetWidth(buttonWidth)
 	transformButton:SetCallback("OnClick", function(widget, button)
-		if private.TransformText(editBox:GetText()) then
+		if private.TransformText() then
 			jsonItemsBox:SetText(private.importContext.items)
 			jsonPetsBox:SetText(private.importContext.pets)
 		else
@@ -570,6 +572,7 @@ function addon:CreateWindow()
 		editBox:SetText("")
 		jsonItemsBox:SetText("")
 		jsonPetsBox:SetText("")
+		tsmDropdown:SetValue("")
 		editBox:SetFocus()
 	end)
 	buttonsGroup:AddChild(clearButton)
@@ -579,15 +582,21 @@ end
 -- Private Helper Functions
 -- ============================================================================
 
-local ROOT_GROUP_PATH = ""
-local GROUP_SEP = "`"
+function private.CreateGroup(layout, parent)
+	local group = AceGUI:Create("SimpleGroup")
+	group:SetLayout(layout)
+	group:SetFullWidth(true)
+	group:SetFullHeight(true)
+	parent:AddChild(group)
+	return group
+end
 
 function private.UpdateValues()
 	debug("UpdateValues")
 	local widgetPrice = addon.priceSource
 
 	if widgetPrice and not widgetPrice.open then
-		debug("Setting list")
+		debug("Setting price source list")
 		widgetPrice:SetList(private.availablePriceSources)
 
 		debug(settings.settings.priceSource)
@@ -596,12 +605,21 @@ function private.UpdateValues()
 			widgetPrice:SetValue(settings.settings.priceSource)
 		end
 	end
+
+	local widgetTsmDropdown = addon.tsmDropdown
+	if widgetTsmDropdown and not widgetTsmDropdown.open then
+		debug("Setting tsm groups dropdown")
+		widgetTsmDropdown:SetList(private.availableTsmGroups)
+	end
 end
 
-function private.TransformText(text)
-	debug("Transforming: " .. text)
+function private.TransformText()
+	local selectedGroup = private.availableTsmGroups[private.GetFromDb("settings", "tsmDropdown")]
+	local subgroups = addon.tsmSubgroups:GetValue()
+
+	debug("Transforming: " .. selectedGroup .. " including subgroups: ".. tostring(subgroups))
 	addon.gui:SetStatusText(L["status_text"])
-	if private.ProcessTSMGroupString(text) then
+	if private.ProcessTSMGroup(selectedGroup, subgroups) then
 		return true
 	end
 	return false
@@ -670,14 +688,14 @@ function private.PreparePriceSources()
 
 	-- only 2 or less price sources -> chat msg: missing modules
 	if private.tablelength(priceSources) < 1 then
-		StaticPopupDialogs["BA_NO_PRICESOURCES"] = {
+		StaticPopupDialogs["AT_NO_PRICESOURCES"] = {
 			text = L["no_price_sources"],
 			button1 = OKAY,
 			timeout = 0,
 			whileDead = true,
 			hideOnEscape = true
 		}
-		StaticPopup_Show("BA_NO_PRICESOURCES");
+		StaticPopup_Show("AT_NO_PRICESOURCES");
 
 		addon:Print(L["addon_disabled"]);
 		addon:Disable();
@@ -688,20 +706,47 @@ function private.PreparePriceSources()
 
 		-- normal price source check against prepared list
 		if not priceSources[priceSource] then
-			StaticPopupDialogs["BA_INVALID_CUSTOM_PRICESOURCE"] = {
+			StaticPopupDialogs["TA_INVALID_CUSTOM_PRICESOURCE"] = {
 				text = L["invalid_price_sources"],
 				button1 = OKAY,
 				timeout = 0,
 				whileDead = true,
 				hideOnEscape = true
 			}
-			StaticPopup_Show("BA_INVALID_CUSTOM_PRICESOURCE")
+			StaticPopup_Show("TA_INVALID_CUSTOM_PRICESOURCE")
 		end
 	end
 
 	-- sort the list of price sources
 	table.sort(priceSources, function(k1, k2) return priceSources[k1] < priceSources[k2] end)
 	private.availablePriceSources = priceSources
+end
+
+function private.PrepareTsmGroups()
+	debug("PrepareTsmGroups()")
+
+	-- price source check --
+	local tsmGroups = addon.TSM.GetGroups() or {}
+	debug(format("loaded %d tsm groups", private.tablelength(tsmGroups)));
+	debug("Groups: ".. private.tableToString(tsmGroups))
+
+	-- only 2 or less price sources -> chat msg: missing modules
+	if private.tablelength(tsmGroups) < 1 then
+		StaticPopupDialogs["AT_NO_TSMGROUPS"] = {
+			text = L["no_tsm_groups"],
+			button1 = OKAY,
+			timeout = 0,
+			whileDead = true,
+			hideOnEscape = true
+		}
+		StaticPopup_Show("AT_NO_TSMGROUPS");
+
+		addon:Print(L["addon_disabled"]);
+		addon:Disable();
+		return
+	end
+
+	private.availableTsmGroups = tsmGroups
 end
 
 function private.GetFromDb(grp, key, ...)
@@ -716,7 +761,7 @@ function private.GetItemValue(itemString, itemLink, priceSource)
 	-- from which addon is our selected price source?
 	local selectedPriceSource = addon.CONST.PRICE_SOURCE[private.GetFromDb("settings", "priceSource")]
 	if private.startsWith(selectedPriceSource, "OE:") then
-		return addon.OE.GetItemValue(itemLink:sub(3), priceSource)
+		return addon.OE.GetItemValue(itemString:sub(3), priceSource)
 	elseif private.startsWith(selectedPriceSource, "ATR:") then
 		return addon.ATR.GetItemValue(itemLink, priceSource)
 	else
@@ -734,48 +779,46 @@ function private.startsWith(String, Start)
 	return string.sub(String, 1, string.len(Start)) == Start
 end
 
--- ============================================================================
--- Credit for the process of TSM group string functionality and all below goes to TSM addon.
--- ============================================================================
-function private.ProcessTSMGroupString(str)
-	-- decode and decompress (if it's not a new import, the decode should fail)
-	str = LibDeflate:DecodeForPrint(str)
-	if not str then
-		debug("Not a valid new import string")
-		return false
-	end
-	local numExtraBytes = nil
-	str, numExtraBytes = LibDeflate:DecompressDeflate(str)
-	if not str then
-		debug("Failed to decompress new import string")
-		return false
-	elseif numExtraBytes > 0 then
-		debug("Import string had extra bytes")
-		return false
-	end
+function private.tableToString(tbl)
+    local result = "{"
+    for k, v in pairs(tbl) do
+        -- Check the key type (ignore any numerical keys - assume its an array)
+        if type(k) == "string" then
+            result = result.."[\""..k.."\"]".."="
+        end
 
-	-- deserialize and validate the data
-	local success, magicStr, version, groupName, items, groups, groupOperations, operations, customSources = LibSerialize:Deserialize(str)
-	if not success then
-		debug("Failed to deserialize new import string")
-		return false
-	elseif magicStr ~= MAGIC_STR then
-		debug("Invalid magic string: " .. tostring(magicStr))
-		return false
-	elseif version ~= VERSION then
-		debug("Invalid version: " .. tostring(version))
-		return false
-	elseif type(items) ~= "table" then
-		debug("Invalid items type: " .. tostring(items))
-		return false
-	end
+        -- Check the value type
+        if type(v) == "table" then
+            result = result..private.tableToString(v)
+        elseif type(v) == "boolean" then
+            result = result..tostring(v)
+        else
+            result = result.."\""..v.."\""
+        end
+        result = result..","
+    end
+    -- Remove leading commas from the result
+    if result ~= "{" then
+        result = result:sub(1, result:len()-1)
+    end
+    return result.."}"
+end
+
+function private.ProcessTSMGroup(group, includeSubgroups)
+	local items = {}
+	addon.TSM.GetGroupItems(group, includeSubgroups, items)
+	debug("Items: ".. private.tableToString(items))
 
 	local outputItems = ""
+	local itemCounter = 0
 	local outputPets = ""
+	local petCounter = 0
 	outputItems = "{"
 	outputPets = "{"
-	for itemString, groupPath in pairs(items) do
-		local itemLink = type(itemString) == "string" and private.GetItemString(itemString) or "i:"
+	for _, itemString in pairs(items) do
+		local itemLink = type(itemString) == "string" and addon.TSM.GetItemLink(itemString) or "i:"
+		debug("itemString: "..itemString)
+		debug("itemLink"..itemLink)
 		local price = (private.GetItemValue(itemString, itemLink, private.GetFromDb("settings", "priceSource")) or 0)
 		local discountedPrice = price / 100 / 100 * ((100 - private.GetFromDb("settings", "discount")) / 100)
 		local finalPrice
@@ -784,191 +827,25 @@ function private.ProcessTSMGroupString(str)
 		else
 			finalPrice = discountedPrice
 		end
-		if (private.startsWith(itemLink, "p:")) then
-			outputPets = outputPets .. '\n    "' .. itemLink:sub(3) .. '": ' .. (string.format("%.2f", finalPrice)) .. ','
+		if (private.startsWith(itemString, "p:")) then
+			outputPets = outputPets .. '\n    "' .. itemString:sub(3) .. '": ' .. (string.format("%.2f", finalPrice)) .. ','
+			petCounter = petCounter + 1
 		else
-			outputItems = outputItems .. '\n    "' .. itemLink:sub(3) .. '": ' .. (string.format("%.2f", finalPrice)) .. ','
+			outputItems = outputItems .. '\n    "' .. itemString:sub(3) .. '": ' .. (string.format("%.2f", finalPrice)) .. ','
+			itemCounter = itemCounter + 1
 		end
 	end
-	outputItems = outputItems:sub(1, -2)
+	if (itemCounter > 0) then
+		outputItems = outputItems:sub(1, -2)
+	end
 	outputItems = outputItems .. "\n}"
-	outputPets = outputPets:sub(1, -2)
+	if (petCounter > 0) then
+		outputPets = outputPets:sub(1, -2)
+	end
 	outputPets = outputPets .. "\n}"
 
 	debug("Decoded new import string")
 	private.importContext.items = outputItems
 	private.importContext.pets = outputPets
 	return true
-end
-
-function private.GetItemString(item)
-	if not item then
-		return nil
-	end
-	if not private.itemStringCache[item] then
-		private.itemStringCache[item] = private.ToItemString(item)
-	end
-	return private.itemStringCache[item]
-end
-
-function private.ToItemString(item)
-	local paramType = type(item)
-	if paramType == "string" then
-		item = strtrim(item)
-		local itemId = strmatch(item, "^item:(%d+)$")
-		if itemId then
-			item = "i:" .. itemId
-		else
-			itemId = strmatch(item, "^[ip]:(%d+)$")
-		end
-		if itemId then
-			if tonumber(itemId) > ITEM_MAX_ID then
-				return nil
-			end
-			-- This is already an itemString
-			return item
-		end
-	elseif paramType == "number" or tonumber(item) then
-		local itemId = tonumber(item)
-		if itemId > ITEM_MAX_ID then
-			return nil
-		end
-		-- assume this is an itemId
-		return "i:" .. item
-	else
-		error("Invalid item parameter type: " .. tostring(item))
-	end
-
-	-- test if it's already (likely) an item string or battle pet string
-	if strmatch(item, "^i:([0-9%-:i%+]+)$") then
-		return private.FixItemString(item)
-	elseif strmatch(item, "^p:([i0-9:]+)$") then
-		return private.FixPet(item)
-	end
-
-	local result = strmatch(item, "^\124cff[0-9a-z]+\124[Hh](.+)\124h%[.+%]\124h\124r$")
-	if result then
-		-- it was a full item link which we've extracted the itemString from
-		item = result
-	end
-
-	-- test if it's an old style item string
-	result = strjoin(":", strmatch(item, "^(i)tem:([0-9%-]+):[0-9%-]+:[0-9%-]+:[0-9%-]+:[0-9%-]+:[0-9%-]+:([0-9%-]+)$"))
-	if result then
-		return private.FixItemString(result)
-	end
-
-	-- test if it's an old style battle pet string (or if it was a link)
-	result = strjoin(":", strmatch(item, "^battle(p)et:(%d+:%d+:%d+)"))
-	if result then
-		return private.FixPet(result)
-	end
-	result = strjoin(":", strmatch(item, "^battle(p)et:(%d+)[:]*$"))
-	if result then
-		return result
-	end
-	result = strjoin(":", strmatch(item, "^(p):(%d+:%d+:%d+)"))
-	if result then
-		return private.FixPet(result)
-	end
-
-	-- test if it's a long item string
-	result = strjoin(":",
-		strmatch(item,
-			"(i)tem:([0-9%-]+):[0-9%-]*:[0-9%-]*:[0-9%-]*:[0-9%-]*:[0-9%-]*:([0-9%-]*):[0-9%-]*:[0-9%-]*:[0-9%-]*:[0-9%-]*:[0-9%-]*:([0-9%-:]+)"))
-	if result and result ~= "" then
-		return private.FixItemString(result)
-	end
-
-	-- test if it's a shorter item string (without bonuses)
-	result = strjoin(":", strmatch(item, "(i)tem:([0-9%-]+):[0-9%-]*:[0-9%-]*:[0-9%-]*:[0-9%-]*:[0-9%-]*:([0-9%-]*)"))
-	if result and result ~= "" then
-		return result
-	end
-end
-
-function private.FixItemString(itemString)
-	itemString = gsub(itemString, ":0:", "::") -- remove 0s which are in the middle
-	itemString = private.RemoveExtra(itemString)
-	return private.FilterBonusIdsAndModifiers(itemString, false, strsplit(":", itemString))
-end
-
-function private.FixPet(itemString)
-	itemString = private.RemoveExtra(itemString)
-	return strmatch(itemString, "^(p:%d+:%d+:%d+)$") or strmatch(itemString, "^(p:%d+:i%d+)$") or
-	strmatch(itemString, "^(p:%d+)")
-end
-
-function private.RemoveExtra(itemString)
-	local num = 1
-	while num > 0 do
-		itemString, num = gsub(itemString, ":0?$", "")
-	end
-	return itemString
-end
-
-function private.FilterBonusIdsAndModifiers(itemString, importantBonusIdsOnly, itemType, itemId, rand, numBonusIds, ...)
-	numBonusIds = tonumber(numBonusIds) or 0
-	local numParts = select("#", ...)
-	if numParts == 0 then
-		return itemString
-	end
-
-	-- grab the modifiers and filter them
-	local numModifiers = numParts - numBonusIds
-	local modifiersStr = (numModifiers > 0 and numModifiers > 1 and numModifiers % 2 == 1) and
-	strjoin(":", select(numBonusIds + 1, ...)) or ""
-	if modifiersStr ~= "" then
-		wipe(private.modifiersTemp)
-		wipe(private.modifiersValueTemp)
-		wipe(private.extraStatModifiersTemp)
-		local num, modifierType = nil, nil
-		for modifier in gmatch(modifiersStr, "[0-9]+") do
-			modifier = tonumber(modifier)
-			if not num then
-				num = modifier
-			elseif not modifierType then
-				modifierType = modifier
-			else
-				if IMPORTANT_MODIFIER_TYPES[modifierType] then
-					tinsert(private.modifiersTemp, modifierType)
-					assert(not private.modifiersValueTemp[modifierType])
-					private.modifiersValueTemp[modifierType] = modifier
-				elseif not importantBonusIdsOnly and EXTRA_STAT_MODIFIER_TYPES[modifierType] then
-					tinsert(private.modifiersTemp, modifierType)
-					tinsert(private.extraStatModifiersTemp, modifier)
-				end
-				modifierType = nil
-			end
-		end
-		if #private.modifiersTemp > 0 then
-			sort(private.modifiersTemp)
-			sort(private.extraStatModifiersTemp)
-			-- insert the values into modifiersTemp
-			for i = #private.modifiersTemp, 1, -1 do
-				local tempModifierType = private.modifiersTemp[i]
-				local modifier = nil
-				if EXTRA_STAT_MODIFIER_TYPES[tempModifierType] then
-					assert(not importantBonusIdsOnly)
-					modifier = tremove(private.extraStatModifiersTemp)
-				else
-					modifier = private.modifiersValueTemp[tempModifierType]
-				end
-				assert(modifier)
-				tinsert(private.modifiersTemp, i + 1, modifier)
-			end
-			tinsert(private.modifiersTemp, 1, #private.modifiersTemp / 2)
-			modifiersStr = table.concat(private.modifiersTemp, ":")
-		else
-			modifiersStr = ""
-		end
-	end
-
-	-- filter the bonusIds
-	local bonusIdsStr = ""
-
-	-- rebuild the itemString
-	itemString = strjoin(":", itemType, itemId, rand, bonusIdsStr, modifiersStr)
-	itemString = gsub(itemString, ":0:", "::") -- remove 0s which are in the middle
-	return private.RemoveExtra(itemString)
 end

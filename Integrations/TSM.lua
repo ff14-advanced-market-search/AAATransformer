@@ -15,13 +15,10 @@ end
 
 function TSM.GetItemValue(itemLink, priceSource)
   if TSM_API and TSM_API.GetCustomPriceValue then
-    -- addon.Debug.Log(format("  TSM_API.ToItemString %s", itemLink))
     local tsmItemLink = TSM_API.ToItemString(itemLink)
     if not tsmItemLink then
-      -- addon.Debug.Log(format("  Cannot create tsmItemLink for %s, skipping", itemLink))
       return 0
     end
-    -- addon.Debug.Log(format("  TSM_API.GetCustomPriceValue() %s %s", priceSource, tsmItemLink))
     return TSM_API.GetCustomPriceValue(priceSource, tsmItemLink)
   end
 
@@ -29,10 +26,7 @@ function TSM.GetItemValue(itemLink, priceSource)
 end
 
 function TSM.GetAvailablePriceSources()
-  -- addon.Debug.Log("tsm.GetAvailablePriceSources()")
-
   if not TSM.IsLoaded() then
-    -- addon.Debug.Log("tsm.GetAvailablePriceSources: TSM not loaded")
     return
   end
 
@@ -74,4 +68,30 @@ function TSM.GetAvailablePriceSources()
   end
 
   return priceSources
+end
+
+function TSM.GetGroups()
+  if not TSM.IsLoaded() then
+    return
+  end
+
+  local groups = {}
+
+  -- filter
+  local tsmGroups = {}
+  TSM_API.GetGroupPaths(tsmGroups)
+
+  for k, v in pairs(tsmGroups) do
+    table.insert(groups, v)
+  end
+
+  return groups
+end
+
+function TSM.GetGroupItems(path, includeSubGroups, result)
+  return TSM_API.GetGroupItems(path, includeSubGroups, result)
+end
+
+function TSM.GetItemLink(itemString)
+return TSM_API.GetItemLink(itemString)
 end
