@@ -82,7 +82,7 @@ function TSM.GetGroups()
   TSM_API.GetGroupPaths(tsmGroups)
 
   for k, v in pairs(tsmGroups) do
-    table.insert(groups, v)
+    table.insert(groups, TSM_API.FormatGroupPath(v))
   end
 
   return groups
@@ -93,5 +93,5 @@ function TSM.GetGroupItems(path, includeSubGroups, result)
 end
 
 function TSM.GetItemLink(itemString)
-return TSM_API.GetItemLink(itemString)
+  return TSM_API.GetItemLink(itemString)
 end

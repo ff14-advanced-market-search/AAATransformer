@@ -5,7 +5,7 @@ local L = LibStub("AceLocale-3.0"):GetLocale(addonName);
 
 local defaults = {
 	profile = {
-		debug = false, -- for addon debugging
+		debug = true, -- for addon debugging
 		minimap = {
 			hide = false,
 		},
@@ -301,7 +301,6 @@ function addon:ToggleWindow(keystate)
 		addon.gui:Hide()
 	else
 		addon.gui:Show()
-		addon.edit:SetFocus()
 		addon:Update()
 	end
 end
@@ -375,6 +374,12 @@ function addon:CreateWindow()
 	editBox:DisableButton(true)
 	editBox:SetFullWidth(true)
 	editBox:SetText(L["example_input"])
+	editBox:SetCallback("OnTextChanged", private.ClearDropdown)
+	editBox:SetCallback('OnEditFocusGained', function(self)
+		if (editBox:GetText() == L["example_input"]) then
+			editBox:SetText('')
+		end
+	end)
 	addon.edit = editBox
 	addon.editfont = CreateFont("TransformEditFont")
 	addon.editfont:CopyFontObject(ChatFontNormal)
@@ -569,11 +574,11 @@ function addon:CreateWindow()
 	clearButton:SetText(L["clear_button"])
 	clearButton:SetWidth(buttonWidth)
 	clearButton:SetCallback("OnClick", function(widget, button)
-		editBox:SetText("")
 		jsonItemsBox:SetText("")
 		jsonPetsBox:SetText("")
 		tsmDropdown:SetValue("")
-		editBox:SetFocus()
+		editBox:SetText(L["example_input"])
+		addon.gui:SetStatusText("")
 	end)
 	buttonsGroup:AddChild(clearButton)
 end
@@ -589,6 +594,11 @@ function private.CreateGroup(layout, parent)
 	group:SetFullHeight(true)
 	parent:AddChild(group)
 	return group
+end
+
+function private.ClearDropdown()
+	addon.tsmDropdown:SetValue("")
+	settings.settings.tsmDropdown = ""
 end
 
 function private.UpdateValues()
@@ -614,14 +624,22 @@ function private.UpdateValues()
 end
 
 function private.TransformText()
-	local selectedGroup = private.availableTsmGroups[private.GetFromDb("settings", "tsmDropdown")]
-	local subgroups = addon.tsmSubgroups:GetValue()
+	if (addon.tsmDropdown:GetValue() == nil or addon.tsmDropdown:GetValue() == "") then
+		if private.ProcessString(addon.edit:GetText()) then
+			addon.gui:SetStatusText(L["status_text"])
+			return true
+		end
+	else
+		local selectedGroup = private.availableTsmGroups[private.GetFromDb("settings", "tsmDropdown")]
+		local subgroups = addon.tsmSubgroups:GetValue()
 
-	debug("Transforming: " .. selectedGroup .. " including subgroups: ".. tostring(subgroups))
-	addon.gui:SetStatusText(L["status_text"])
-	if private.ProcessTSMGroup(selectedGroup, subgroups) then
-		return true
+		debug("Transforming: " .. selectedGroup .. " including subgroups: " .. tostring(subgroups))
+		if private.ProcessTSMGroup(selectedGroup, subgroups) then
+			addon.gui:SetStatusText(L["status_text"])
+			return true
+		end
 	end
+
 	return false
 end
 
@@ -728,7 +746,7 @@ function private.PrepareTsmGroups()
 	-- price source check --
 	local tsmGroups = addon.TSM.GetGroups() or {}
 	debug(format("loaded %d tsm groups", private.tablelength(tsmGroups)));
-	debug("Groups: ".. private.tableToString(tsmGroups))
+	debug("Groups: " .. private.tableToString(tsmGroups))
 
 	-- only 2 or less price sources -> chat msg: missing modules
 	if private.tablelength(tsmGroups) < 1 then
@@ -780,34 +798,49 @@ function private.startsWith(String, Start)
 end
 
 function private.tableToString(tbl)
-    local result = "{"
-    for k, v in pairs(tbl) do
-        -- Check the key type (ignore any numerical keys - assume its an array)
-        if type(k) == "string" then
-            result = result.."[\""..k.."\"]".."="
-        end
+	local result = "{"
+	for k, v in pairs(tbl) do
+		-- Check the key type (ignore any numerical keys - assume its an array)
+		if type(k) == "string" then
+			result = result .. "[\"" .. k .. "\"]" .. "="
+		end
 
-        -- Check the value type
-        if type(v) == "table" then
-            result = result..private.tableToString(v)
-        elseif type(v) == "boolean" then
-            result = result..tostring(v)
-        else
-            result = result.."\""..v.."\""
-        end
-        result = result..","
-    end
-    -- Remove leading commas from the result
-    if result ~= "{" then
-        result = result:sub(1, result:len()-1)
-    end
-    return result.."}"
+		-- Check the value type
+		if type(v) == "table" then
+			result = result .. private.tableToString(v)
+		elseif type(v) == "boolean" then
+			result = result .. tostring(v)
+		else
+			result = result .. "\"" .. v .. "\""
+		end
+		result = result .. ","
+	end
+	-- Remove leading commas from the result
+	if result ~= "{" then
+		result = result:sub(1, result:len() - 1)
+	end
+	return result .. "}"
+end
+
+function private.ProcessString(text)
+	if (text:find("^i:") == nil or text:find("^p:") == nil) then
+		return false
+	end
+	local tableItems = {}
+	for str in string.gmatch(text, "([^,]+)") do
+		table.insert(tableItems, str)
+	end
+	return private.ProcessItems(tableItems)
 end
 
 function private.ProcessTSMGroup(group, includeSubgroups)
 	local items = {}
 	addon.TSM.GetGroupItems(group, includeSubgroups, items)
-	debug("Items: ".. private.tableToString(items))
+	return private.ProcessItems(items)
+end
+
+function private.ProcessItems(items)
+	debug("Items: " .. private.tableToString(items))
 
 	local outputItems = ""
 	local itemCounter = 0
@@ -817,8 +850,8 @@ function private.ProcessTSMGroup(group, includeSubgroups)
 	outputPets = "{"
 	for _, itemString in pairs(items) do
 		local itemLink = type(itemString) == "string" and addon.TSM.GetItemLink(itemString) or "i:"
-		debug("itemString: "..itemString)
-		debug("itemLink"..itemLink)
+		debug("itemString: " .. itemString)
+		debug("itemLink" .. itemLink)
 		local price = (private.GetItemValue(itemString, itemLink, private.GetFromDb("settings", "priceSource")) or 0)
 		local discountedPrice = price / 100 / 100 * ((100 - private.GetFromDb("settings", "discount")) / 100)
 		local finalPrice
@@ -828,10 +861,12 @@ function private.ProcessTSMGroup(group, includeSubgroups)
 			finalPrice = discountedPrice
 		end
 		if (private.startsWith(itemString, "p:")) then
-			outputPets = outputPets .. '\n    "' .. itemString:sub(3) .. '": ' .. (string.format("%.2f", finalPrice)) .. ','
+			outputPets = outputPets ..
+				'\n    "' .. itemString:sub(3) .. '": ' .. (string.format("%.2f", finalPrice)) .. ','
 			petCounter = petCounter + 1
 		else
-			outputItems = outputItems .. '\n    "' .. itemString:sub(3) .. '": ' .. (string.format("%.2f", finalPrice)) .. ','
+			outputItems = outputItems ..
+				'\n    "' .. itemString:sub(3) .. '": ' .. (string.format("%.2f", finalPrice)) .. ','
 			itemCounter = itemCounter + 1
 		end
 	end
