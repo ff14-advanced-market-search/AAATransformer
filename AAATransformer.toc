@@ -21,6 +21,6 @@ Locales\Locales.xml
 
 AAATransformer.lua
 
-PriceSources\ATR.lua
-PriceSources\OE.lua
-PriceSources\TSM.lua
+Integrations\ATR.lua
+Integrations\OE.lua
+Integrations\TSM.lua
