@@ -823,7 +823,7 @@ function private.tableToString(tbl)
 end
 
 function private.ProcessString(text)
-	if (text:find("^i:") == nil or text:find("^p:") == nil) then
+	if (text:find("^i:") == nil and text:find("^p:") == nil) then
 		return false
 	end
 	local tableItems = {}
