@@ -5,7 +5,7 @@ local L = LibStub("AceLocale-3.0"):GetLocale(addonName);
 
 local defaults = {
 	profile = {
-		debug = true, -- for addon debugging
+		debug = false, -- for addon debugging
 		minimap = {
 			hide = false,
 		},
