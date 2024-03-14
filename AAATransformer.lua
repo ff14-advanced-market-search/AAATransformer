@@ -29,6 +29,7 @@ local LDB, LDBo
 
 local private = {
 	availablePriceSources = {},
+	tsmGroups = {},
 	availableTsmGroups = {},
 	importContext = {},
 	itemStringCache = {},
@@ -56,7 +57,7 @@ function addon:GetOptions()
 		type = "group",
 		set = function(info, val)
 			local s = settings; for i = 2, #info - 1 do s = s[info[i]] end
-			s[info[#info]] = val; debug(info[#info] .. " set to: " .. tostring(val))
+			s[info[#info]] = val; -- debug(info[#info] .. " set to: " .. tostring(val))
 			addon:Update()
 		end,
 		get = function(info)
@@ -136,7 +137,7 @@ end
 
 function addon:RefreshConfig()
 	-- things to do after load or settings are reset
-	debug("RefreshConfig")
+	-- debug("RefreshConfig")
 	settings = addon.db.profile
 	private.settings = settings
 	charName = UnitName("player")
@@ -205,7 +206,7 @@ function addon:OnInitialize()
 	options.args.profiles = LibStub("AceDBOptions-3.0"):GetOptionsTable(addon.db)
 	LibStub("AceConfigDialog-3.0"):AddToBlizOptions(addonName, "Profiles", addonName, "profiles")
 
-	debug("OnInitialize")
+	-- debug("OnInitialize")
 
 	self.db.RegisterCallback(self, "OnProfileChanged", "RefreshConfig")
 	self.db.RegisterCallback(self, "OnProfileCopied", "RefreshConfig")
@@ -246,7 +247,7 @@ function addon:Config()
 end
 
 function addon:OnEnable()
-	debug("OnEnable")
+	-- debug("OnEnable")
 
 	if LDB then
 		return
@@ -291,7 +292,7 @@ end
 
 function addon:ToggleWindow(keystate)
 	if keystate == "down" then return end -- ensure keybind doesnt end up in the text box
-	debug("ToggleWindow")
+	-- debug("ToggleWindow")
 
 	if not addon.gui then
 		addon:CreateWindow()
@@ -333,35 +334,39 @@ function addon:CreateWindow()
 
 	-- Create main group, where everything is placed.
 	local mainGroup = private.CreateGroup("List", frame)
+	local editBox = AceGUI:Create("MultiLineEditBox")
 
 	-- Create dropdown group, where everything is placed.
 	local dropdownGroup = private.CreateGroup("Flow", mainGroup)
-	local tsmGroup = private.CreateGroup("List", dropdownGroup)
 
-	-- Create tsm dropdown
-	local tsmDropdown = AceGUI:Create("Dropdown")
-	tsmGroup:AddChild(tsmDropdown)
-	addon.tsmDropdown = tsmDropdown
-	tsmDropdown:SetMultiselect(false)
-	tsmDropdown:SetLabel(L["tsm_groups_label"])
-	tsmDropdown:SetRelativeWidth(0.75)
-	tsmDropdown:SetCallback("OnEnter", private.UpdateValues)
-	tsmDropdown:SetCallback("OnValueChanged", function(widget, event, key)
-		settings.settings.tsmDropdown = key
+	if (addon.TSM.IsLoaded()) then
+		local tsmGroup = private.CreateGroup("List", dropdownGroup)
+
+		-- Create tsm dropdown
+		local tsmDropdown = AceGUI:Create("Dropdown")
+		tsmGroup:AddChild(tsmDropdown)
+		addon.tsmDropdown = tsmDropdown
+		tsmDropdown:SetMultiselect(false)
+		tsmDropdown:SetLabel(L["tsm_groups_label"])
+		tsmDropdown:SetRelativeWidth(0.5)
+		tsmDropdown:SetCallback("OnEnter", private.UpdateValues)
+		tsmDropdown:SetCallback("OnValueChanged", function(widget, event, key)
+			settings.settings.tsmDropdown = key
+			editBox:SetText("")
+			private.UpdateValues()
+		end)
 		private.UpdateValues()
-	end)
-	private.UpdateValues()
 
-	-- Create tsm sub group checkbox
-	local tsmSubgroups = AceGUI:Create("CheckBox")
-	addon.tsmSubgroups = tsmSubgroups
-	tsmGroup:AddChild(tsmSubgroups)
-	tsmSubgroups:SetType("checkbox")
-	tsmSubgroups:SetLabel(L["tsm_checkbox_label"])
-	tsmSubgroups:SetValue(true)
+		-- Create tsm sub group checkbox
+		local tsmSubgroups = AceGUI:Create("CheckBox")
+		addon.tsmSubgroups = tsmSubgroups
+		tsmGroup:AddChild(tsmSubgroups)
+		tsmSubgroups:SetType("checkbox")
+		tsmSubgroups:SetLabel(L["tsm_checkbox_label"])
+		tsmSubgroups:SetValue(true)
+	end
 
 	-- Create text box, where the text is placed.
-	local editBox = AceGUI:Create("MultiLineEditBox")
 	mainGroup:AddChild(editBox)
 	editBox:SetMaxLetters(0)
 	local shortcut = "Control-V"
@@ -576,7 +581,9 @@ function addon:CreateWindow()
 	clearButton:SetCallback("OnClick", function(widget, button)
 		jsonItemsBox:SetText("")
 		jsonPetsBox:SetText("")
-		tsmDropdown:SetValue("")
+		if (addon.TSM.IsLoaded()) then
+			addon.tsmDropdown:SetValue("")
+		end
 		editBox:SetText(L["example_input"])
 		addon.gui:SetStatusText("")
 	end)
@@ -602,14 +609,14 @@ function private.ClearDropdown()
 end
 
 function private.UpdateValues()
-	debug("UpdateValues")
+	-- debug("UpdateValues")
 	local widgetPrice = addon.priceSource
 
 	if widgetPrice and not widgetPrice.open then
-		debug("Setting price source list")
+		-- debug("Setting price source list")
 		widgetPrice:SetList(private.availablePriceSources)
 
-		debug(settings.settings.priceSource)
+		-- debug(settings.settings.priceSource)
 		if not private.availablePriceSources[settings.settings.priceSource] then
 			settings.settings.priceSource = "DBMarket"
 			widgetPrice:SetValue(settings.settings.priceSource)
@@ -618,7 +625,7 @@ function private.UpdateValues()
 
 	local widgetTsmDropdown = addon.tsmDropdown
 	if widgetTsmDropdown and not widgetTsmDropdown.open then
-		debug("Setting tsm groups dropdown")
+		-- debug("Setting tsm groups dropdown")
 		widgetTsmDropdown:SetList(private.availableTsmGroups)
 	end
 end
@@ -630,10 +637,10 @@ function private.TransformText()
 			return true
 		end
 	else
-		local selectedGroup = private.availableTsmGroups[private.GetFromDb("settings", "tsmDropdown")]
+		local selectedGroup = private.tsmGroups[private.GetFromDb("settings", "tsmDropdown")]
 		local subgroups = addon.tsmSubgroups:GetValue()
 
-		debug("Transforming: " .. selectedGroup .. " including subgroups: " .. tostring(subgroups))
+		-- debug("Transforming: " .. selectedGroup .. " including subgroups: " .. tostring(subgroups))
 		if private.ProcessTSMGroup(selectedGroup, subgroups) then
 			addon.gui:SetStatusText(L["status_text"])
 			return true
@@ -667,7 +674,6 @@ function private.GetAvailablePriceSources()
 	local priceSources = {}
 
 	-- TSM
-	debug('TSM loaded: ' .. tostring(addon.TSM.IsLoaded()))
 	if addon.TSM.IsLoaded() then
 		local ps = addon.TSM.GetAvailablePriceSources() or {}
 		for k, v in pairs(ps) do
@@ -676,7 +682,6 @@ function private.GetAvailablePriceSources()
 	end
 
 	-- Oribos Exchange
-	debug('OE loaded: ' .. tostring(addon.OE.IsLoaded()))
 	if addon.OE.IsLoaded() then
 		local ps = addon.OE.GetAvailablePriceSources() or {}
 		for k, v in pairs(ps) do
@@ -685,7 +690,6 @@ function private.GetAvailablePriceSources()
 	end
 
 	-- Auctionator
-	debug('ATR loaded: ' .. tostring(addon.ATR.IsLoaded()))
 	if addon.ATR.IsLoaded() then
 		local ps = addon.ATR.GetAvailablePriceSources() or {}
 		for k, v in pairs(ps) do
@@ -698,11 +702,11 @@ function private.GetAvailablePriceSources()
 end
 
 function private.PreparePriceSources()
-	debug("PreparePriceSources()")
+	-- debug("PreparePriceSources()")
 
 	-- price source check --
 	local priceSources = private.GetAvailablePriceSources() or {}
-	debug(format("loaded %d price sources", private.tablelength(priceSources)));
+	-- debug(format("loaded %d price sources", private.tablelength(priceSources)));
 
 	-- only 2 or less price sources -> chat msg: missing modules
 	if private.tablelength(priceSources) < 1 then
@@ -741,12 +745,12 @@ function private.PreparePriceSources()
 end
 
 function private.PrepareTsmGroups()
-	debug("PrepareTsmGroups()")
+	-- debug("PrepareTsmGroups()")
 
 	-- price source check --
 	local tsmGroups = addon.TSM.GetGroups() or {}
-	debug(format("loaded %d tsm groups", private.tablelength(tsmGroups)));
-	debug("Groups: " .. private.tableToString(tsmGroups))
+	-- debug(format("loaded %d tsm groups", private.tablelength(tsmGroups)));
+	-- debug("Groups: " .. private.tableToString(tsmGroups))
 
 	-- only 2 or less price sources -> chat msg: missing modules
 	if private.tablelength(tsmGroups) < 1 then
@@ -764,7 +768,17 @@ function private.PrepareTsmGroups()
 		return
 	end
 
-	private.availableTsmGroups = tsmGroups
+	private.tsmGroups = tsmGroups
+
+	for k, v in pairs(tsmGroups) do
+		local parent, group = addon.TSM.SplitGroupPath(v)
+		local _, c = v:gsub("`", "")
+
+		if (parent ~= nil) then
+			group = private.lpad(addon.TSM.FormatGroupPath(group), c * 4, " ")
+		end
+		table.insert(private.availableTsmGroups, k, group)
+	end
 end
 
 function private.GetFromDb(grp, key, ...)
@@ -785,6 +799,10 @@ function private.GetItemValue(itemString, itemLink, priceSource)
 	else
 		return addon.TSM.GetItemValue(itemString, priceSource)
 	end
+end
+
+function private.lpad(str, len, char)
+	return string.rep(char, len) .. str
 end
 
 function private.tablelength(T)
@@ -840,7 +858,7 @@ function private.ProcessTSMGroup(group, includeSubgroups)
 end
 
 function private.ProcessItems(items)
-	debug("Items: " .. private.tableToString(items))
+	-- debug("Items: " .. private.tableToString(items))
 
 	local outputItems = ""
 	local itemCounter = 0
@@ -850,24 +868,29 @@ function private.ProcessItems(items)
 	outputPets = "{"
 	for _, itemString in pairs(items) do
 		local itemLink = type(itemString) == "string" and addon.TSM.GetItemLink(itemString) or "i:"
-		debug("itemString: " .. itemString)
-		debug("itemLink" .. itemLink)
-		local price = (private.GetItemValue(itemString, itemLink, private.GetFromDb("settings", "priceSource")) or 0)
-		local discountedPrice = price / 100 / 100 * ((100 - private.GetFromDb("settings", "discount")) / 100)
-		local finalPrice
-		if (discountedPrice == 0) then
-			finalPrice = private.GetFromDb("settings", "fallback")
+		-- debug("itemString: " .. itemString)
+		-- debug("itemLink" .. itemLink)
+		if (string.match(itemString, "::")) then
+			debug("skipped item: " .. itemString)
+			debug("skipped item: " .. itemLink)
 		else
-			finalPrice = discountedPrice
-		end
-		if (private.startsWith(itemString, "p:")) then
-			outputPets = outputPets ..
-				'\n    "' .. itemString:sub(3) .. '": ' .. (string.format("%.2f", finalPrice)) .. ','
-			petCounter = petCounter + 1
-		else
-			outputItems = outputItems ..
-				'\n    "' .. itemString:sub(3) .. '": ' .. (string.format("%.2f", finalPrice)) .. ','
-			itemCounter = itemCounter + 1
+			local price = (private.GetItemValue(itemString, itemLink, private.GetFromDb("settings", "priceSource")) or 0)
+			local discountedPrice = price / 100 / 100 * ((100 - private.GetFromDb("settings", "discount")) / 100)
+			local finalPrice
+			if (discountedPrice == 0) then
+				finalPrice = private.GetFromDb("settings", "fallback")
+			else
+				finalPrice = discountedPrice
+			end
+			if (private.startsWith(itemString, "p:")) then
+				outputPets = outputPets ..
+					'\n    "' .. itemString:sub(3) .. '": ' .. (string.format("%.2f", finalPrice)) .. ','
+				petCounter = petCounter + 1
+			else
+				outputItems = outputItems ..
+					'\n    "' .. itemString:sub(3) .. '": ' .. (string.format("%.2f", finalPrice)) .. ','
+				itemCounter = itemCounter + 1
+			end
 		end
 	end
 	if (itemCounter > 0) then
@@ -879,7 +902,7 @@ function private.ProcessItems(items)
 	end
 	outputPets = outputPets .. "\n}"
 
-	debug("Decoded new import string")
+	-- debug("Decoded new import string")
 	private.importContext.items = outputItems
 	private.importContext.pets = outputPets
 	return true

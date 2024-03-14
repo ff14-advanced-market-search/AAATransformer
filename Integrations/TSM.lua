@@ -82,16 +82,40 @@ function TSM.GetGroups()
   TSM_API.GetGroupPaths(tsmGroups)
 
   for k, v in pairs(tsmGroups) do
-    table.insert(groups, TSM_API.FormatGroupPath(v))
+    table.insert(groups, k, v)
   end
 
   return groups
 end
 
+function TSM.FormatGroupPath(path)
+  if not TSM.IsLoaded() then
+    return
+  end
+
+  return TSM_API.FormatGroupPath(path)
+end
+
+function TSM.SplitGroupPath(path)
+  if not TSM.IsLoaded() then
+    return
+  end
+
+  return TSM_API.SplitGroupPath(path)
+end
+
 function TSM.GetGroupItems(path, includeSubGroups, result)
+  if not TSM.IsLoaded() then
+    return
+  end
+
   return TSM_API.GetGroupItems(path, includeSubGroups, result)
 end
 
 function TSM.GetItemLink(itemString)
+  if not TSM.IsLoaded() then
+    return itemString
+  end
+
   return TSM_API.GetItemLink(itemString)
 end
