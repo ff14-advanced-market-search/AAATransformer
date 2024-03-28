@@ -3,15 +3,12 @@
 ## Description: Transforms TSM group strings to AAA items JSON
 ## Notes: Transforms TSM group strings to AAA items JSON
 ## Author: Berickus
-## Version: 1.0.1
+## Version: @project-version@
 ## OptionalDependencies: TradeSkillMaster, OribosExchange, Auctionator
 ## SavedVariables: AAATransformerDB
-## X-Embeds: Ace3, LibDataBroker-1.1, CallbackHandler-1.0, LibDBIcon-1.0
-## X-Compatible-With: 100206
-## X-Curse-Packaged-Version: 1.0.1
-## X-Curse-Project-Name: AAATransformer
-## X-Curse-Project-ID: 983232
 ## X-Localizations: enUS, deDE
+## X-Website: https://www.curseforge.com/wow/addons/aaatransformer
+## X-Category: Auction/Economy
 
 embeds.xml
 
