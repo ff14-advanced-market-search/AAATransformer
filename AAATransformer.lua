@@ -541,7 +541,7 @@ function addon:CreateWindow()
 	settings.settings.fallback = settings.settings.fallback or "1000"
 	fallback:SetLabel(L["fallback_price_label"])
 	fallback:SetText(settings.settings.fallback)
-	fallback:SetMaxLetters(3)
+	fallback:SetMaxLetters(7)
 	fallback:SetWidth(100)
 	fallback:SetCallback("OnEnter", private.UpdateValues)
 	fallback:SetCallback("OnTextChanged", function(widget, text)
