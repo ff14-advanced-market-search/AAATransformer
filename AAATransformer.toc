@@ -1,14 +1,17 @@
-## Interface: 100206
+## Interface: 100207, 110000
+## X-Min-Interface: 100207
 ## Title: AAA Transformer
 ## Description: Transforms TSM group strings to AAA items JSON
 ## Notes: Transforms TSM group strings to AAA items JSON
-## Author: Berickus
-## Version: @project-version@
 ## OptionalDependencies: TradeSkillMaster, OribosExchange, Auctionator
 ## SavedVariables: AAATransformerDB
 ## X-Localizations: enUS, deDE
-## X-Website: https://www.curseforge.com/wow/addons/aaatransformer
+## Author: Berickus
+## Version: @project-version@
+## X-Curse-Project-ID: 983232
+## X-Wago-ID: 4N2mvZGL
 ## X-Category: Auction/Economy
+## X-Website: https://saddlebagexchange.com/wow
 
 embeds.xml
 
