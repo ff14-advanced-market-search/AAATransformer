@@ -19,6 +19,7 @@ local defaults = {
 			priceSource = "DBMarket",
 			fallback = "1000"
 		},
+		aaalists = {},
 	}
 }
 
@@ -40,6 +41,7 @@ local private = {
 	settings = {
 		groups = {},
 	},
+	aaalists = {},
 }
 
 local function chatMsg(msg)
@@ -140,6 +142,7 @@ function addon:RefreshConfig()
 	-- debug("RefreshConfig")
 	settings = addon.db.profile
 	private.settings = settings
+	private.aaalists = settings.aaalists
 	charName = UnitName("player")
 
 	for k, v in pairs(defaults.profile) do
@@ -356,6 +359,7 @@ function addon:CreateWindow()
 			private.UpdateValues()
 		end)
 		private.UpdateValues()
+		tsmDropdown:SetValue(settings.settings.tsmDropdown)
 
 		-- Create tsm sub group checkbox
 		local tsmSubgroups = AceGUI:Create("CheckBox")
@@ -905,5 +909,6 @@ function private.ProcessItems(items)
 	-- debug("Decoded new import string")
 	private.importContext.items = outputItems
 	private.importContext.pets = outputPets
+	settings.aaalists = private.importContext
 	return true
 end
