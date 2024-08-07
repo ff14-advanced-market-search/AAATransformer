@@ -886,13 +886,18 @@ function private.ProcessItems(items)
 			else
 				finalPrice = discountedPrice
 			end
-			if (private.startsWith(itemString, "p:")) then
+
+			local parts = {}
+			for part in string.gmatch(itemString, "([^:]+)") do
+				table.insert(parts, part)
+			end
+			if (parts[1] == "p") then
 				outputPets = outputPets ..
-					'\n    "' .. itemString:sub(3) .. '": ' .. (string.format("%.2f", finalPrice)) .. ','
+					'\n    "' .. parts[2] .. '": ' .. (string.format("%.2f", finalPrice)) .. ','
 				petCounter = petCounter + 1
 			else
 				outputItems = outputItems ..
-					'\n    "' .. itemString:sub(3) .. '": ' .. (string.format("%.2f", finalPrice)) .. ','
+					'\n    "' .. parts[2] .. '": ' .. (string.format("%.2f", finalPrice)) .. ','
 				itemCounter = itemCounter + 1
 			end
 		end
