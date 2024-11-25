@@ -5,7 +5,6 @@ local L = LibStub("AceLocale-3.0"):GetLocale(addonName);
 
 local defaults = {
 	profile = {
-		debug = false, -- for addon debugging
 		minimap = {
 			hide = false,
 		},
@@ -34,7 +33,6 @@ local private = {
 	availableTsmGroups = {},
 	importContext = {},
 	itemStringCache = {},
-	debugLeaks = nil,
 	freeTempTables = {},
 	tempTableState = {},
 	operationInfo = {},
@@ -44,22 +42,13 @@ local private = {
 	aaalists = {},
 }
 
-local function chatMsg(msg)
-	DEFAULT_CHAT_FRAME:AddMessage(addonName .. ": " .. msg)
-end
-
-local function debug(msg)
-	if addon.db.profile.debug then
-		chatMsg(msg)
-	end
-end
-
 function addon:GetOptions()
 	return {
 		type = "group",
 		set = function(info, val)
 			local s = settings; for i = 2, #info - 1 do s = s[info[i]] end
-			s[info[#info]] = val; -- debug(info[#info] .. " set to: " .. tostring(val))
+			s[info[#info]] = val
+			addon.Debug.Log(info[#info] .. " set to: " .. tostring(val))
 			addon:Update()
 		end,
 		get = function(info)
@@ -72,12 +61,6 @@ function addon:GetOptions()
 				inline = true,
 				name = L["general"],
 				args = {
-					debug = {
-						name = L["debug"],
-						desc = L["debug_toggle"],
-						type = "toggle",
-						guiHidden = true,
-					},
 					config = {
 						name = L["config"],
 						desc = L["config_toggle"],
@@ -139,7 +122,7 @@ end
 
 function addon:RefreshConfig()
 	-- things to do after load or settings are reset
-	-- debug("RefreshConfig")
+	addon.Debug.Log("RefreshConfig")
 	settings = addon.db.profile
 	private.settings = settings
 	private.aaalists = settings.aaalists
@@ -209,7 +192,7 @@ function addon:OnInitialize()
 	options.args.profiles = LibStub("AceDBOptions-3.0"):GetOptionsTable(addon.db)
 	LibStub("AceConfigDialog-3.0"):AddToBlizOptions(addonName, "Profiles", addonName, "profiles")
 
-	-- debug("OnInitialize")
+	addon.Debug.Log("OnInitialize")
 
 	self.db.RegisterCallback(self, "OnProfileChanged", "RefreshConfig")
 	self.db.RegisterCallback(self, "OnProfileCopied", "RefreshConfig")
@@ -250,7 +233,7 @@ function addon:Config()
 end
 
 function addon:OnEnable()
-	-- debug("OnEnable")
+	addon.Debug.Log("OnEnable")
 
 	if LDB then
 		return
@@ -295,7 +278,7 @@ end
 
 function addon:ToggleWindow(keystate)
 	if keystate == "down" then return end -- ensure keybind doesnt end up in the text box
-	-- debug("ToggleWindow")
+	addon.Debug.Log("ToggleWindow")
 
 	if not addon.gui then
 		addon:CreateWindow()
@@ -613,14 +596,14 @@ function private.ClearDropdown()
 end
 
 function private.UpdateValues()
-	-- debug("UpdateValues")
+	addon.Debug.Log("UpdateValues")
 	local widgetPrice = addon.priceSource
 
 	if widgetPrice and not widgetPrice.open then
-		-- debug("Setting price source list")
+		addon.Debug.Log("Setting price source list")
 		widgetPrice:SetList(private.availablePriceSources)
 
-		-- debug(settings.settings.priceSource)
+		addon.Debug.Log(settings.settings.priceSource)
 		if not private.availablePriceSources[settings.settings.priceSource] then
 			settings.settings.priceSource = "DBMarket"
 			widgetPrice:SetValue(settings.settings.priceSource)
@@ -629,7 +612,7 @@ function private.UpdateValues()
 
 	local widgetTsmDropdown = addon.tsmDropdown
 	if widgetTsmDropdown and not widgetTsmDropdown.open then
-		-- debug("Setting tsm groups dropdown")
+		addon.Debug.Log("Setting tsm groups dropdown")
 		widgetTsmDropdown:SetList(private.availableTsmGroups)
 	end
 end
@@ -644,7 +627,7 @@ function private.TransformText()
 		local selectedGroup = private.tsmGroups[private.GetFromDb("settings", "tsmDropdown")]
 		local subgroups = addon.tsmSubgroups:GetValue()
 
-		-- debug("Transforming: " .. selectedGroup .. " including subgroups: " .. tostring(subgroups))
+		addon.Debug.Log("Transforming: " .. selectedGroup .. " including subgroups: " .. tostring(subgroups))
 		if private.ProcessTSMGroup(selectedGroup, subgroups) then
 			addon.gui:SetStatusText(L["status_text"])
 			return true
@@ -701,16 +684,16 @@ function private.GetAvailablePriceSources()
 		end
 	end
 
-	-- addon.Debug.TableToString(priceSources);
+	addon.Debug.TableToString(priceSources);
 	return priceSources
 end
 
 function private.PreparePriceSources()
-	-- debug("PreparePriceSources()")
+	addon.Debug.Log("PreparePriceSources()")
 
 	-- price source check --
 	local priceSources = private.GetAvailablePriceSources() or {}
-	-- debug(format("loaded %d price sources", private.tablelength(priceSources)));
+	addon.Debug.Log(format("loaded %d price sources", private.tablelength(priceSources)));
 
 	-- only 2 or less price sources -> chat msg: missing modules
 	if private.tablelength(priceSources) < 1 then
@@ -749,12 +732,12 @@ function private.PreparePriceSources()
 end
 
 function private.PrepareTsmGroups()
-	-- debug("PrepareTsmGroups()")
+	addon.Debug.Log("PrepareTsmGroups()")
 
 	-- price source check --
 	local tsmGroups = addon.TSM.GetGroups() or {}
-	-- debug(format("loaded %d tsm groups", private.tablelength(tsmGroups)));
-	-- debug("Groups: " .. private.tableToString(tsmGroups))
+	addon.Debug.Log(format("loaded %d tsm groups", private.tablelength(tsmGroups)));
+	addon.Debug.Log("Groups: " .. private.tableToString(tsmGroups))
 
 	-- only 2 or less price sources -> chat msg: missing modules
 	if private.tablelength(tsmGroups) < 1 then
@@ -862,7 +845,7 @@ function private.ProcessTSMGroup(group, includeSubgroups)
 end
 
 function private.ProcessItems(items)
-	-- debug("Items: " .. private.tableToString(items))
+	addon.Debug.Log("Items: " .. private.tableToString(items))
 
 	local outputItems = ""
 	local itemCounter = 0
@@ -872,8 +855,8 @@ function private.ProcessItems(items)
 	outputPets = "{"
 	for _, itemString in pairs(items) do
 		local itemLink = type(itemString) == "string" and addon.TSM.GetItemLink(itemString) or "i:"
-		-- debug("itemString: " .. itemString)
-		-- debug("itemLink" .. itemLink)
+		addon.Debug.Log("itemString: " .. itemString)
+		addon.Debug.Log("itemLink" .. itemLink)
 		if (string.match(itemString, "::")) then
 			debug("skipped item: " .. itemString)
 			debug("skipped item: " .. itemLink)
@@ -911,7 +894,7 @@ function private.ProcessItems(items)
 	end
 	outputPets = outputPets .. "\n}"
 
-	-- debug("Decoded new import string")
+	addon.Debug.Log("Decoded new import string")
 	private.importContext.items = outputItems
 	private.importContext.pets = outputPets
 	settings.aaalists = private.importContext
