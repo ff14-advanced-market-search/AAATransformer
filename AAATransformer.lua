@@ -858,8 +858,8 @@ function private.ProcessItems(items)
 		addon.Debug.Log("itemString: " .. itemString)
 		addon.Debug.Log("itemLink" .. itemLink)
 		if (string.match(itemString, "::")) then
-			debug("skipped item: " .. itemString)
-			debug("skipped item: " .. itemLink)
+			addon.Debug.Log("skipped item: " .. itemString)
+			addon.Debug.Log("skipped item: " .. itemLink)
 		else
 			local price = (private.GetItemValue(itemString, itemLink, private.GetFromDb("settings", "priceSource")) or 0)
 			local discountedPrice = price / 100 / 100 * ((100 - private.GetFromDb("settings", "discount")) / 100)
