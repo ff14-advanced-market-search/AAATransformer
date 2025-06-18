@@ -1,5 +1,5 @@
-## Interface: 110105
-## X-Min-Interface: 110105
+## Interface: 110107
+## X-Min-Interface: 110107
 ## Title: AAA Transformer
 ## Description: Transforms TSM group strings to AAA items JSON
 ## Notes: Transforms TSM group strings to AAA items JSON
