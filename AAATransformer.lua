@@ -42,6 +42,23 @@ local private = {
 	aaalists = {},
 }
 
+local function tooltip_draw(isAddonCompartment, blizzardTooltip)
+  local tooltip
+  if isAddonCompartment then
+    tooltip = blizzardTooltip
+  else
+    tooltip = GameTooltip
+  end
+  tooltip:ClearLines()
+  tooltip:AddDoubleLine(addonName, versionString)
+  tooltip:AddLine(" ")
+  tooltip:AddLine("|cffff8040" .. L["left_click"] .. "|r " .. L["toogle"])
+  tooltip:AddLine("|cffff8040" .. L["right_click"] .. "|r " .. L["options"])
+  tooltip:Show();
+end
+
+addon.GenerateTooltip = tooltip_draw;
+
 function addon:GetOptions()
 	return {
 		type = "group",
@@ -205,6 +222,27 @@ function addon:OnInitialize()
 	private.PreparePriceSources();
 	private.PrepareTsmGroups();
 	addon:RefreshConfig()
+
+    AddonCompartmentFrame:RegisterAddon({
+        text = addonName,
+        icon = "Interface\\Icons\\inv_scroll_11",
+        registerForAnyClick = true,
+        notCheckable = true,
+        func = function(button, menuInputData, menu)
+            local mouseButton = menuInputData.buttonName
+            if mouseButton == "RightButton" then
+                addon:Config()
+            else
+                addon:ToggleWindow()
+            end
+        end,
+        funcOnEnter = function(button)
+            MenuUtil.ShowTooltip(button, function(tooltip)
+                addon.GenerateTooltip(true, tooltip)
+            end)
+        end,
+        funcOnLeave = function(button) MenuUtil.HideTooltip(button) end
+    })
 end
 
 function addon:HandleChatCommand(input)
@@ -259,9 +297,11 @@ function addon:OnEnable()
 			end,
 			OnTooltipShow = function(tooltip)
 				if tooltip and tooltip.AddLine then
-					tooltip:SetText(addonName)
-					tooltip:AddLine("|cffff8040" .. L["left_click"] .. "|r " .. L["toogle"])
-					tooltip:AddLine("|cffff8040" .. L["right_click"] .. "|r " .. L["options"])
+          tooltip:ClearLines()
+          tooltip:AddDoubleLine(addonName, versionString)
+          tooltip:AddLine(" ")
+          tooltip:AddLine("|cffff8040" .. L["left_click"] .. "|r " .. L["toogle"])
+          tooltip:AddLine("|cffff8040" .. L["right_click"] .. "|r " .. L["options"])
 					tooltip:Show()
 				end
 			end,
