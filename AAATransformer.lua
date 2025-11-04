@@ -202,7 +202,7 @@ function addon:OnInitialize()
 		addon:RefreshConfig()
 
 		if SettingsPanel:IsShown() then
-			addon:Config(); addon:Config()
+			addon:Config()
 		end
 	end
 
@@ -265,7 +265,8 @@ function addon:Config()
 		if (SettingsPanel:IsShown()) then
 			SettingsPanel:Hide();
 		else
-			InterfaceOptionsFrame_OpenToCategory(optionsFrame)
+			Settings.OpenToCategory(addonName)
+			SettingsPanel.AddOnsTab:Click()
 		end
 	end
 end
