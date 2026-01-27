@@ -1,6 +1,11 @@
 local addonName = "AAA Transformer"
 local addon = LibStub("AceAddon-3.0"):NewAddon(select(2, ...), addonName, "AceConsole-3.0")
+
+local LibStub = LibStub
+local AceConfigRegistry = LibStub("AceConfigRegistry-3.0")
+local AceConfigDialog = LibStub("AceConfigDialog-3.0")
 local AceGUI = LibStub("AceGUI-3.0")
+local AceDB = LibStub("AceDB-3.0")
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName);
 
 local defaults = {
@@ -24,6 +29,7 @@ local defaults = {
 
 local settings = defaults.profile
 local optionsFrame
+local optionsFrameID
 local minimapIcon = LibStub("LibDBIcon-1.0")
 local LDB, LDBo
 
@@ -78,13 +84,6 @@ function addon:GetOptions()
 				inline = true,
 				name = L["general"],
 				args = {
-					config = {
-						name = L["config"],
-						desc = L["config_toggle"],
-						type = "execute",
-						guiHidden = true,
-						func = function() addon:Config() end,
-					},
 					show = {
 						name = L["show"],
 						desc = L["show_toggle"],
@@ -186,28 +185,27 @@ function addon:Update()
 end
 
 function addon:OnInitialize()
-	addon.db = LibStub("AceDB-3.0"):New("AAATransformerDB", defaults, true)
+	addon.db = AceDB:New("AAATransformerDB", defaults, true)
 	addon:RefreshConfig()
 
 	local options = addon:GetOptions()
-	LibStub("AceConfigRegistry-3.0"):ValidateOptionsTable(options, addonName)
-	LibStub("AceConfig-3.0"):RegisterOptionsTable(addonName, options, { "aaatransformer" })
+	AceConfigRegistry:ValidateOptionsTable(options, addonName)
+	AceConfigRegistry:RegisterOptionsTable(addonName, options)
 
-	optionsFrame = LibStub("AceConfigDialog-3.0"):AddToBlizOptions(addonName, addonName, nil, "general")
+	optionsFrame = AceConfigDialog:AddToBlizOptions(addonName, addonName)
+	addon.settingsCategory = Settings.GetCategory(addonName)
+	addon.Debug.Log("optionsFrameID: " .. (addon.settingsCategory and addon.settingsCategory:GetID() or "nil"))
+
+
 	optionsFrame.default = function()
 		for k, v in pairs(defaults.profile) do
 			settings[k] = table_clone(v)
 		end
 
 		addon:RefreshConfig()
-
-		if SettingsPanel:IsShown() then
-			addon:Config()
-		end
 	end
 
 	options.args.profiles = LibStub("AceDBOptions-3.0"):GetOptionsTable(addon.db)
-	LibStub("AceConfigDialog-3.0"):AddToBlizOptions(addonName, "Profiles", addonName, "profiles")
 
 	addon.Debug.Log("OnInitialize")
 
@@ -231,7 +229,7 @@ function addon:OnInitialize()
         func = function(button, menuInputData, menu)
             local mouseButton = menuInputData.buttonName
             if mouseButton == "RightButton" then
-                addon:Config()
+                
             else
                 addon:ToggleWindow()
             end
@@ -260,17 +258,6 @@ function addon:HandleChatCommand(input)
 	addon:ToggleWindow()
 end
 
-function addon:Config()
-	if optionsFrame then
-		if (SettingsPanel:IsShown()) then
-			SettingsPanel:Hide();
-		else
-			Settings.OpenToCategory(addonName)
-			SettingsPanel.AddOnsTab:Click()
-		end
-	end
-end
-
 function addon:OnEnable()
 	addon.Debug.Log("OnEnable")
 
@@ -291,7 +278,7 @@ function addon:OnEnable()
 			icon = "Interface\\Icons\\inv_scroll_11",
 			OnClick = function(self, button)
 				if button == "RightButton" then
-					addon:Config()
+					
 				else
 					addon:ToggleWindow()
 				end
@@ -302,7 +289,6 @@ function addon:OnEnable()
           tooltip:AddDoubleLine(addonName, versionString)
           tooltip:AddLine(" ")
           tooltip:AddLine("|cffff8040" .. L["left_click"] .. "|r " .. L["toogle"])
-          tooltip:AddLine("|cffff8040" .. L["right_click"] .. "|r " .. L["options"])
 					tooltip:Show()
 				end
 			end,
