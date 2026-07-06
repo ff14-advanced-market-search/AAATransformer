@@ -1,4 +1,4 @@
-## Interface: 120005
+## Interface: 120007
 ## Title: AAA Transformer
 ## Description: Transforms TSM group strings to AAA items JSON
 ## Notes: Transforms TSM group strings to AAA items JSON
