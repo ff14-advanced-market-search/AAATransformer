@@ -42,3 +42,6 @@ luac.out
 *.x86_64
 *.hex
 
+
+# Libraries fetched by the packager (.pkgmeta externals) -- see ../sync-libs.sh
+Libs/**
