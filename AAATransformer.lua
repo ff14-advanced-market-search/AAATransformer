@@ -146,7 +146,7 @@ function addon:RefreshConfig()
 
 	for k, v in pairs(defaults.profile) do
 		if settings[k] == nil then
-			settings[k] = table_clone(v)
+			settings[k] = (type(v) == "table" and CopyTable(v) or v)
 		end
 	end
 
@@ -199,7 +199,7 @@ function addon:OnInitialize()
 
 	optionsFrame.default = function()
 		for k, v in pairs(defaults.profile) do
-			settings[k] = table_clone(v)
+			settings[k] = (type(v) == "table" and CopyTable(v) or v)
 		end
 
 		addon:RefreshConfig()
